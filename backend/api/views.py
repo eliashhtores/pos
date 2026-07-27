@@ -2,12 +2,13 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Category, Product, Order
+from .models import Category, Product, Order, AccountPayable
 from .serializers import (
     CategorySerializer,
     ProductSerializer,
     OrderReadSerializer,
     OrderWriteSerializer,
+    AccountPayableSerializer,
 )
 
 
@@ -22,7 +23,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "description", "category__name"]
+    search_fields = ["name", "barcode", "description", "category__name"]
     ordering_fields = ["name", "price", "stock", "created_at"]
 
     def get_queryset(self):
@@ -66,3 +67,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = Order.Status.CANCELLED
         order.save(update_fields=["status"])
         return Response(OrderReadSerializer(order).data)
+
+
+class AccountPayableViewSet(viewsets.ModelViewSet):
+    queryset = AccountPayable.objects.all()
+    serializer_class = AccountPayableSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name"]
+    ordering_fields = ["due_date", "amount", "name"]

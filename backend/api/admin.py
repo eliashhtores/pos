@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Product, Order, OrderItem
+from .models import Category, Product, Order, OrderItem, AccountPayable
 
 
 @admin.register(Category)
@@ -10,9 +10,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "price", "stock", "category", "is_active"]
+    list_display = ["id", "name", "barcode", "price", "stock", "category", "is_active"]
     list_filter = ["category", "is_active"]
-    search_fields = ["name"]
+    search_fields = ["name", "barcode"]
 
 
 class OrderItemInline(admin.TabularInline):
@@ -30,3 +30,10 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ["status"]
     readonly_fields = ["total", "created_at", "updated_at"]
     inlines = [OrderItemInline]
+
+
+@admin.register(AccountPayable)
+class AccountPayableAdmin(admin.ModelAdmin):
+    list_display = ["id", "name", "amount", "due_date"]
+    search_fields = ["name"]
+    ordering = ["due_date"]

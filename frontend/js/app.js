@@ -12,7 +12,6 @@
 let products = []
 let categories = []
 const cart = new Map()
-let searchDebounce = null
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -25,18 +24,29 @@ document.addEventListener("DOMContentLoaded", () => {
 })
 
 function initApp() {
+    const btn = document.getElementById("checkout-btn")
+    btn.disabled = true
     document.getElementById("login-overlay").classList.add("hidden")
     document.getElementById("app").classList.remove("hidden")
     showPage("pos")
     loadCategories()
     loadProducts()
 
-    // Use backend search/filter instead of client-side filtering
-    document.getElementById("search-input").addEventListener("input", () => {
-        clearTimeout(searchDebounce)
-        searchDebounce = setTimeout(loadProducts, 300)
+    const searchInput = document.getElementById("search-input")
+    const paymentInput = document.getElementById("cart-payment")
+    // Products are fetched once on load; filter/display client-side as the
+    // cashier types a product name or scans/types a barcode.
+    searchInput.addEventListener("input", renderProductGrid)
+    searchInput.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return
+        e.preventDefault()
+        addFirstMatchToCart()
     })
-    document.getElementById("category-filter").addEventListener("change", loadProducts)
+    document.getElementById("category-filter").addEventListener("change", renderProductGrid)
+
+    if (paymentInput) {
+        paymentInput.addEventListener("input", renderCart)
+    }
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -80,7 +90,7 @@ function logout() {
 // ── Page navigation ───────────────────────────────────────────────────────────
 
 function showPage(name) {
-    ;["pos", "orders", "products"].forEach((p) => {
+    ;["pos", "orders", "products", "payables"].forEach((p) => {
         document.getElementById(`page-${p}`).classList.toggle("hidden", p !== name)
         const btn = document.getElementById(`nav-${p}`)
         btn.classList.toggle("bg-white", p === name)
@@ -90,6 +100,7 @@ function showPage(name) {
 
     if (name === "orders") loadOrders()
     if (name === "products") loadProductsTable()
+    if (name === "payables") loadPayablesTable()
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -129,36 +140,79 @@ async function loadCategories() {
 }
 
 // ── Products (Cashier) ────────────────────────────────────────────────────────
-// Search and category filtering are delegated to the backend via query params.
+// All active products are fetched once on load. The cashier then looks products
+// up by typing a name or scanning/typing a barcode; nothing is shown until a
+// search term or category is provided.
 
 async function loadProducts() {
-    const params = { is_active: "true" }
-    const search = document.getElementById("search-input").value.trim()
-    const catId = document.getElementById("category-filter").value
-    if (search) params.search = search
-    if (catId) params.category = catId
-
     try {
-        const data = await productsApi.list(params)
-        products = data.results || data
+        products = await productsApi.listAll({ is_active: "true" })
         renderProductGrid()
     } catch (e) {
         showToast("No se pudieron cargar los productos. ¿Está el backend en ejecución?", "error")
     }
 }
 
+function getFilteredProducts() {
+    const search = document.getElementById("search-input").value.trim().toLowerCase()
+    const catId = document.getElementById("category-filter").value
+
+    if (!search && !catId) return null // nothing entered yet — show the hint instead
+
+    return products.filter((product) => {
+        const matchesSearch =
+            !search || product.name.toLowerCase().includes(search) || (product.barcode && product.barcode.toLowerCase().includes(search))
+        const matchesCategory = !catId || String(product.category) === catId
+        return matchesSearch && matchesCategory
+    })
+}
+
+// If the search box holds an exact barcode match, or the current filter
+// narrows results down to a single product, add it straight to the cart.
+// Lets a cashier scan a barcode + Enter to add an item without clicking.
+function addFirstMatchToCart() {
+    const search = document.getElementById("search-input").value.trim().toLowerCase()
+    if (!search) return
+
+    const exactBarcodeMatch = products.find((p) => p.barcode && p.barcode.toLowerCase() === search)
+    const filtered = getFilteredProducts() || []
+    const match = exactBarcodeMatch || (filtered.length === 1 ? filtered[0] : null)
+
+    if (!match) {
+        showToast("Ningún producto coincide.", "error")
+        return
+    }
+
+    addToCart(match)
+    const searchInput = document.getElementById("search-input")
+    searchInput.value = ""
+    searchInput.focus()
+    renderProductGrid()
+}
+
 function renderProductGrid() {
     const grid = document.getElementById("product-grid")
     const empty = document.getElementById("products-empty")
+    const hint = document.getElementById("products-hint")
+
+    const filtered = getFilteredProducts()
+
+    if (filtered === null) {
+        grid.innerHTML = ""
+        empty.classList.add("hidden")
+        hint.classList.remove("hidden")
+        return
+    }
+    hint.classList.add("hidden")
 
     grid.innerHTML = ""
-    if (products.length === 0) {
+    if (filtered.length === 0) {
         empty.classList.remove("hidden")
         return
     }
     empty.classList.add("hidden")
 
-    products.forEach((product) => {
+    filtered.forEach((product) => {
         const card = document.createElement("button")
         card.className =
             "bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all p-4 text-left flex flex-col gap-2 border border-transparent hover:border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
@@ -224,8 +278,30 @@ function changeQty(productId, delta) {
 function clearCart() {
     cart.clear()
     document.getElementById("order-note").value = ""
+    document.getElementById("cart-payment").value = ""
     renderCart()
     renderProductGrid()
+}
+
+function getCartTotalPrice() {
+    let totalPrice = 0
+    cart.forEach((item) => {
+        totalPrice += item.quantity * Number(item.product.price)
+    })
+    return totalPrice
+}
+
+function getPaymentAndChange(totalPrice) {
+    const paymentInput = document.getElementById("cart-payment")
+    const paid = Number(paymentInput.value)
+
+    if (paymentInput.value === "" || Number.isNaN(paid) || paid < totalPrice) return { paid: 0, change: 0, hasValidPayment: false }
+
+    return {
+        paid,
+        change: paid - totalPrice,
+        hasValidPayment: true,
+    }
 }
 
 function renderCart() {
@@ -233,6 +309,7 @@ function renderCart() {
     const emptyMsg = document.getElementById("cart-empty")
     const countEl = document.getElementById("cart-count")
     const totalEl = document.getElementById("cart-total")
+    const changeEl = document.getElementById("cart-change")
     const btn = document.getElementById("checkout-btn")
 
     if (cart.size === 0) {
@@ -241,6 +318,9 @@ function renderCart() {
         emptyMsg.classList.remove("hidden")
         countEl.textContent = "0"
         totalEl.textContent = "$0.00"
+        changeEl.textContent = "Cambio: $0.00"
+        changeEl.classList.remove("text-red-600")
+        changeEl.classList.add("text-slate-500")
         btn.disabled = true
         return
     }
@@ -249,20 +329,18 @@ function renderCart() {
     btn.disabled = false
 
     let totalQty = 0
-    let totalPrice = 0
     const fragment = document.createDocumentFragment()
 
     cart.forEach((item, id) => {
         const subtotal = item.quantity * Number(item.product.price)
         totalQty += item.quantity
-        totalPrice += subtotal
 
         const row = document.createElement("div")
         row.className = "flex items-center gap-2"
         row.innerHTML = `
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-slate-700 truncate">${escHtml(item.product.name)}</p>
-        <p class="text-xs text-slate-400">$${Number(item.product.price).toFixed(2)} each</p>
+        <p class="text-xs text-slate-400">$${Number(item.product.price).toFixed(2)} por unidad</p>
       </div>
       <div class="flex items-center gap-1">
         <button onclick="changeQty(${id}, -1)"
@@ -285,8 +363,22 @@ function renderCart() {
     container.appendChild(emptyMsg)
     container.appendChild(fragment)
 
+    const totalPrice = getCartTotalPrice()
+    const { change, hasValidPayment } = getPaymentAndChange(totalPrice)
+
     countEl.textContent = totalQty
     totalEl.textContent = `$${totalPrice.toFixed(2)}`
+
+    changeEl.textContent = `Cambio: $${change.toFixed(2)}`
+    if (change < 0 || !hasValidPayment) {
+        changeEl.classList.remove("text-slate-500")
+        changeEl.classList.add("text-red-600")
+    } else {
+        changeEl.classList.remove("text-red-600")
+        changeEl.classList.add("text-slate-500")
+    }
+
+    btn.disabled = !hasValidPayment || change < 0
 }
 
 // ── Checkout ──────────────────────────────────────────────────────────────────
@@ -294,9 +386,16 @@ function renderCart() {
 async function checkout() {
     if (cart.size === 0) return
 
+    const totalPrice = getCartTotalPrice()
+    const { paid, change, hasValidPayment } = getPaymentAndChange(totalPrice)
+    if (!hasValidPayment || change < 0) {
+        showToast("El pago ingresado no cubre el total de la venta.", "error")
+        return
+    }
+
     const btn = document.getElementById("checkout-btn")
     btn.disabled = true
-    btn.textContent = "Realizando pedido…"
+    btn.textContent = "Realizando cobro…"
 
     const items = []
     cart.forEach((item) => {
@@ -310,15 +409,16 @@ async function checkout() {
 
     try {
         const order = await ordersApi.create(payload)
-        showToast(`Pedido #${order.id} realizado — $${Number(order.total).toFixed(2)}`)
+        showToast(`Venta #${order.id} realizada — Cambio: $${change.toFixed(2)}`)
         clearCart()
         // Reload products so stock counts reflect the order
         loadProducts()
     } catch (e) {
-        showToast(`Error al realizar el pedido: ${e.message}`, "error")
+        showToast(`Error al realizar la venta: ${e.message}`, "error")
     } finally {
-        btn.disabled = false
-        btn.textContent = "Realizar Pedido"
+        btn.textContent = "Cobrar"
+        const searchInput = document.getElementById("search-input")
+        searchInput.value = ""
     }
 }
 
@@ -358,11 +458,7 @@ async function loadOrders() {
                     cancelled: "Cancelado",
                 }[order.status] || order.status
 
-            const itemsSummary =
-                order.items
-                    .slice(0, 2)
-                    .map((i) => `${i.quantity}× ${escHtml(i.product_name)}`)
-                    .join(", ") + (order.items.length > 2 ? ` +${order.items.length - 2} más` : "")
+            const itemsSummary = order.items.map((i) => `${i.quantity}× ${escHtml(i.product_name)}`).join("<br>")
 
             tr.innerHTML = `
         <td class="px-4 py-3 font-medium text-slate-700">#${order.id}</td>
@@ -397,7 +493,7 @@ async function loadOrders() {
 async function completeOrder(id) {
     try {
         await ordersApi.complete(id)
-        showToast(`Pedido #${id} marcado como completado.`)
+        showToast(`Venta #${id} marcada como completada.`)
         loadOrders()
     } catch (e) {
         showToast(e.message, "error")
@@ -405,10 +501,10 @@ async function completeOrder(id) {
 }
 
 async function cancelOrder(id) {
-    if (!confirm(`¿Cancelar el pedido #${id}?`)) return
+    if (!confirm(`¿Cancelar la venta #${id}?`)) return
     try {
         await ordersApi.cancel(id)
-        showToast(`Pedido #${id} cancelado.`)
+        showToast(`Venta #${id} cancelada.`)
         loadOrders()
     } catch (e) {
         showToast(e.message, "error")
@@ -424,8 +520,7 @@ async function loadProductsTable() {
 
     try {
         // Fetch all products (active and inactive) for the management view
-        const data = await productsApi.list()
-        const prods = data.results || data
+        const prods = await productsApi.listAll()
 
         tbody.innerHTML = ""
         if (prods.length === 0) {
@@ -439,6 +534,7 @@ async function loadProductsTable() {
             tr.className = "hover:bg-slate-50"
             tr.innerHTML = `
         <td class="px-4 py-3 font-medium text-slate-700">${escHtml(p.name)}</td>
+        <td class="px-4 py-3 text-slate-500">${p.barcode ? escHtml(p.barcode) : "—"}</td>
         <td class="px-4 py-3 text-slate-500">${p.category_name ? escHtml(p.category_name) : "—"}</td>
         <td class="px-4 py-3 text-right font-semibold">$${Number(p.price).toFixed(2)}</td>
         <td class="px-4 py-3 text-right">${p.stock}</td>
@@ -469,6 +565,7 @@ async function openProductModal(productId) {
             // Fetch from API to get the latest data including inactive products
             const p = await productsApi.get(productId)
             document.getElementById("form-name").value = p.name
+            document.getElementById("form-barcode").value = p.barcode || ""
             document.getElementById("form-category").value = p.category || ""
             document.getElementById("form-price").value = p.price
             document.getElementById("form-stock").value = p.stock
@@ -492,6 +589,7 @@ async function submitProductForm(e) {
     const id = document.getElementById("product-id").value
     const payload = {
         name: document.getElementById("form-name").value.trim(),
+        barcode: document.getElementById("form-barcode").value.trim() || null,
         category: document.getElementById("form-category").value || null,
         price: document.getElementById("form-price").value,
         stock: document.getElementById("form-stock").value,
@@ -522,6 +620,104 @@ async function deleteProduct(id) {
         showToast("Producto eliminado.")
         await loadProducts()
         loadProductsTable()
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error")
+    }
+}
+
+// ── Accounts payable page ─────────────────────────────────────────────────────
+
+async function loadPayablesTable() {
+    const tbody = document.getElementById("payables-table-body")
+    const empty = document.getElementById("payables-table-empty")
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-400">Cargando…</td></tr>'
+    empty.classList.add("hidden")
+
+    try {
+        const data = await payablesApi.list()
+        const payables = data.results || data
+
+        tbody.innerHTML = ""
+        if (payables.length === 0) {
+            empty.classList.remove("hidden")
+            return
+        }
+
+        payables.forEach((payable) => {
+            const tr = document.createElement("tr")
+            tr.className = "hover:bg-slate-50"
+            tr.innerHTML = `
+        <td class="px-4 py-3 font-medium text-slate-700">${escHtml(payable.name)}</td>
+        <td class="px-4 py-3 text-right font-semibold">$${Number(payable.amount).toFixed(2)}</td>
+        <td class="px-4 py-3 text-slate-500">${payable.due_date}</td>
+        <td class="px-4 py-3 text-center space-x-2">
+          <button onclick="openPayableModal(${payable.id})"
+            class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded transition">Editar</button>
+          <button onclick="deletePayable(${payable.id})"
+            class="text-xs bg-red-400 hover:bg-red-500 text-white px-2 py-1 rounded transition">Eliminar</button>
+        </td>
+      `
+            tbody.appendChild(tr)
+        })
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-500">${e.message}</td></tr>`
+    }
+}
+
+async function openPayableModal(payableId) {
+    document.getElementById("payable-modal").classList.remove("hidden")
+    document.getElementById("payable-modal-title").textContent = payableId ? "Editar Cuenta por Pagar" : "Nueva Cuenta por Pagar"
+    document.getElementById("payable-id").value = payableId || ""
+
+    if (payableId) {
+        try {
+            const p = await payablesApi.get(payableId)
+            document.getElementById("payable-name").value = p.name
+            document.getElementById("payable-amount").value = p.amount
+            document.getElementById("payable-due-date").value = p.due_date
+        } catch (e) {
+            showToast("No se pudieron cargar los detalles de la cuenta.", "error")
+            closePayableModal()
+        }
+    } else {
+        document.getElementById("payable-form").reset()
+    }
+}
+
+function closePayableModal() {
+    document.getElementById("payable-modal").classList.add("hidden")
+}
+
+async function submitPayableForm(e) {
+    e.preventDefault()
+    const id = document.getElementById("payable-id").value
+    const payload = {
+        name: document.getElementById("payable-name").value.trim(),
+        amount: document.getElementById("payable-amount").value,
+        due_date: document.getElementById("payable-due-date").value,
+    }
+
+    try {
+        if (id) {
+            await payablesApi.update(id, payload)
+            showToast("Cuenta por pagar actualizada.")
+        } else {
+            await payablesApi.create(payload)
+            showToast("Cuenta por pagar creada.")
+        }
+        closePayableModal()
+        loadPayablesTable()
+    } catch (e) {
+        showToast(`Error: ${e.message}`, "error")
+    }
+}
+
+async function deletePayable(id) {
+    if (!confirm("¿Eliminar esta cuenta por pagar?")) return
+    try {
+        await payablesApi.destroy(id)
+        showToast("Cuenta por pagar eliminada.")
+        loadPayablesTable()
     } catch (e) {
         showToast(`Error: ${e.message}`, "error")
     }

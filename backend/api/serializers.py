@@ -1,6 +1,6 @@
 from django.db import models as db_models
 from rest_framework import serializers
-from .models import Category, Product, Order, OrderItem
+from .models import Category, Product, Order, OrderItem, AccountPayable
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -17,6 +17,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "barcode",
             "description",
             "price",
             "stock",
@@ -28,6 +29,11 @@ class ProductSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+    def validate_barcode(self, value):
+        # Normalize blank strings to None so the unique constraint only
+        # applies to products that actually have a barcode assigned.
+        return value or None
 
 
 class OrderItemReadSerializer(serializers.ModelSerializer):
@@ -128,3 +134,10 @@ class OrderWriteSerializer(serializers.ModelSerializer):
             instance.save(update_fields=["note"])
 
         return instance
+
+
+class AccountPayableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountPayable
+        fields = ["id", "name", "amount", "due_date", "created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at"]
