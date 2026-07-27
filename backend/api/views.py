@@ -20,14 +20,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.select_related("category").filter(is_active=True)
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description", "category__name"]
     ordering_fields = ["name", "price", "stock", "created_at"]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = Product.objects.select_related("category").all()
+        # Filter by is_active when the query param is explicitly provided.
+        # The cashier view passes ?is_active=true; the management view omits it
+        # so that inactive products are also visible and editable.
+        is_active_param = self.request.query_params.get("is_active")
+        if is_active_param is not None:
+            qs = qs.filter(is_active=is_active_param.lower() == "true")
         category = self.request.query_params.get("category")
         if category:
             qs = qs.filter(category_id=category)

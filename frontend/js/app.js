@@ -2,7 +2,7 @@
  * app.js — POS application logic.
  *
  * State:
- *   products   — array of Product objects from the API
+ *   products   — array of Product objects from the API (current page)
  *   categories — array of Category objects from the API
  *   cart       — Map<productId, { product, quantity }>
  */
@@ -12,17 +12,70 @@
 let products = [];
 let categories = [];
 const cart = new Map();
+let searchDebounce = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (!authApi.isAuthenticated()) {
+    showLoginOverlay();
+    return;
+  }
+  initApp();
+});
+
+function initApp() {
+  document.getElementById('login-overlay').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
   showPage('pos');
   loadCategories();
   loadProducts();
 
-  document.getElementById('search-input').addEventListener('input', renderProductGrid);
-  document.getElementById('category-filter').addEventListener('change', renderProductGrid);
+  // Use backend search/filter instead of client-side filtering
+  document.getElementById('search-input').addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(loadProducts, 300);
+  });
+  document.getElementById('category-filter').addEventListener('change', loadProducts);
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+
+function showLoginOverlay() {
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+}
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const loginBtn = document.getElementById('login-btn');
+  const errorEl = document.getElementById('login-error');
+
+  // Retrieve the value of the password field directly from the DOM
+  const pwdField = document.getElementById('login-password');
+  const loginPwd = pwdField ? pwdField.value : '';
+
+  errorEl.textContent = '';
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'Signing in…';
+
+  try {
+    await authApi.login(username, loginPwd);
+    initApp();
+  } catch (err) {
+    errorEl.textContent = 'Invalid username or password.';
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Sign In';
+  }
 });
+
+function logout() {
+  authApi.logout();
+  cart.clear();
+  showLoginOverlay();
+}
 
 // ── Page navigation ───────────────────────────────────────────────────────────
 
@@ -62,7 +115,6 @@ async function loadCategories() {
     const filter = document.getElementById('category-filter');
     const formSel = document.getElementById('form-category');
     [filter, formSel].forEach((sel) => {
-      // keep first option
       while (sel.options.length > 1) sel.remove(1);
       categories.forEach((c) => {
         const opt = document.createElement('option');
@@ -77,10 +129,17 @@ async function loadCategories() {
 }
 
 // ── Products (Cashier) ────────────────────────────────────────────────────────
+// Search and category filtering are delegated to the backend via query params.
 
 async function loadProducts() {
+  const params = { is_active: 'true' };
+  const search = document.getElementById('search-input').value.trim();
+  const catId = document.getElementById('category-filter').value;
+  if (search) params.search = search;
+  if (catId) params.category = catId;
+
   try {
-    const data = await productsApi.list();
+    const data = await productsApi.list(params);
     products = data.results || data;
     renderProductGrid();
   } catch (e) {
@@ -88,29 +147,18 @@ async function loadProducts() {
   }
 }
 
-function filteredProducts() {
-  const search = document.getElementById('search-input').value.toLowerCase().trim();
-  const catId = document.getElementById('category-filter').value;
-  return products.filter((p) => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search);
-    const matchCat = !catId || String(p.category) === catId;
-    return matchSearch && matchCat;
-  });
-}
-
 function renderProductGrid() {
   const grid = document.getElementById('product-grid');
   const empty = document.getElementById('products-empty');
-  const list = filteredProducts();
 
   grid.innerHTML = '';
-  if (list.length === 0) {
+  if (products.length === 0) {
     empty.classList.remove('hidden');
     return;
   }
   empty.classList.add('hidden');
 
-  list.forEach((product) => {
+  products.forEach((product) => {
     const card = document.createElement('button');
     card.className =
       'bg-white rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all p-4 text-left flex flex-col gap-2 border border-transparent hover:border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400';
@@ -264,6 +312,8 @@ async function checkout() {
     const order = await ordersApi.create(payload);
     showToast(`Order #${order.id} placed — $${Number(order.total).toFixed(2)}`);
     clearCart();
+    // Reload products so stock counts reflect the order
+    loadProducts();
   } catch (e) {
     showToast(`Order failed: ${e.message}`, 'error');
   } finally {
@@ -359,6 +409,7 @@ async function loadProductsTable() {
   tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-400">Loading…</td></tr>';
 
   try {
+    // Fetch all products (active and inactive) for the management view
     const data = await productsApi.list();
     const prods = data.results || data;
 
@@ -394,20 +445,24 @@ async function loadProductsTable() {
   }
 }
 
-function openProductModal(productId) {
+async function openProductModal(productId) {
   document.getElementById('product-modal').classList.remove('hidden');
   document.getElementById('modal-title').textContent = productId ? 'Edit Product' : 'New Product';
   document.getElementById('product-id').value = productId || '';
 
   if (productId) {
-    const p = products.find((x) => x.id === productId);
-    if (p) {
+    try {
+      // Fetch from API to get the latest data including inactive products
+      const p = await productsApi.get(productId);
       document.getElementById('form-name').value = p.name;
       document.getElementById('form-category').value = p.category || '';
       document.getElementById('form-price').value = p.price;
       document.getElementById('form-stock').value = p.stock;
       document.getElementById('form-description').value = p.description || '';
       document.getElementById('form-active').checked = p.is_active;
+    } catch (e) {
+      showToast('Could not load product details.', 'error');
+      closeProductModal();
     }
   } else {
     document.getElementById('product-form').reset();

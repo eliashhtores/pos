@@ -14,6 +14,40 @@
 </head>
 <body class="bg-slate-100 min-h-screen font-sans">
 
+  <!-- ===== LOGIN OVERLAY ===== -->
+  <div id="login-overlay"
+    class="fixed inset-0 z-[100] flex items-center justify-center bg-indigo-900/90 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
+      <div class="flex items-center gap-3 mb-6">
+        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <h1 class="text-xl font-bold text-slate-800">POS System</h1>
+      </div>
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1" for="login-username">Username</label>
+          <input id="login-username" type="text" required autocomplete="username"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1" for="login-password">Password</label>
+          <input id="login-password" type="password" required autocomplete="current-password"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </div>
+        <p id="login-error" class="text-sm text-red-600 min-h-[1.25rem]"></p>
+        <button id="login-btn" type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP (hidden until authenticated) ===== -->
+  <div id="app" class="hidden">
+
   <!-- Header -->
   <header class="bg-indigo-700 text-white shadow-md">
     <div class="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -37,11 +71,14 @@
           class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
           Products
         </button>
+        <button onclick="logout()"
+          class="px-3 py-1 rounded-full hover:bg-indigo-600 transition opacity-75 hover:opacity-100">
+          Sign Out
+        </button>
       </nav>
     </div>
   </header>
 
-  <!-- ===== CASHIER PAGE ===== -->
   <main id="page-pos" class="max-w-screen-xl mx-auto px-4 py-6 flex gap-6">
 
     <!-- Products Panel -->
@@ -211,6 +248,8 @@
   <div id="toast"
     class="hidden fixed bottom-5 right-5 z-50 bg-slate-800 text-white text-sm px-5 py-3 rounded-xl shadow-lg transition-opacity duration-300">
   </div>
+
+  </div><!-- end #app -->
 
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>

@@ -1,9 +1,15 @@
 /**
- * api.js — thin XHR/fetch wrapper for the POS REST API.
+ * api.js — thin fetch wrapper for the POS REST API.
  *
- * The base URL is auto-detected: if the frontend is served from the same
- * origin as the backend (via the nginx proxy) we use a relative path;
- * otherwise we fall back to localhost:8000 for local-file development.
+ * Authentication: DRF Token auth.  The token is stored in localStorage under
+ * the key "pos_token" and sent as an "Authorization: Token <token>" header on
+ * every request.  Call authApi.login() to obtain a token; authApi.logout() to
+ * clear it.
+ *
+ * Base URL auto-detection:
+ *   - port 3000 (nginx proxy) → relative /api
+ *   - other localhost port    → http://localhost:8000/api
+ *   - any other origin        → relative /api
  */
 
 const API_BASE =
@@ -11,16 +17,31 @@ const API_BASE =
     ? (window.location.port === '3000' ? '/api' : 'http://localhost:8000/api')
     : '/api';
 
+const TOKEN_KEY = 'pos_token';
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 /**
- * Low-level fetch wrapper. Returns parsed JSON or throws an Error with
- * the server message included.
+ * Low-level fetch wrapper. Returns parsed JSON or throws an Error with the
+ * server message included.  Automatically attaches the auth token when present.
  */
 async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`;
-  const defaults = {
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-  };
-  const config = { ...defaults, ...options };
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Token ${token}`;
+
+  const config = { ...options, headers: { ...headers, ...(options.headers || {}) } };
   if (config.body && typeof config.body === 'object') {
     config.body = JSON.stringify(config.body);
   }
@@ -36,10 +57,31 @@ async function apiFetch(path, options = {}) {
     throw new Error(message);
   }
 
-  // 204 No Content
   if (response.status === 204) return null;
   return response.json();
 }
+
+// ── Authentication ────────────────────────────────────────────────────────────
+
+const authApi = {
+  login: async (username, password) => {
+    const response = await fetch(`${API_BASE}/auth/login/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) {
+      let msg = 'Invalid credentials';
+      try { const err = await response.json(); msg = JSON.stringify(err); } catch (_) {}
+      throw new Error(msg);
+    }
+    const data = await response.json();
+    setToken(data.token);
+    return data;
+  },
+  logout: () => { clearToken(); },
+  isAuthenticated: () => Boolean(getToken()),
+};
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
@@ -54,6 +96,7 @@ const productsApi = {
     const qs = new URLSearchParams(params).toString();
     return apiFetch(`/products/${qs ? '?' + qs : ''}`);
   },
+  get: (id) => apiFetch(`/products/${id}/`),
   create: (data) => apiFetch('/products/', { method: 'POST', body: data }),
   update: (id, data) => apiFetch(`/products/${id}/`, { method: 'PUT', body: data }),
   patch: (id, data) => apiFetch(`/products/${id}/`, { method: 'PATCH', body: data }),
