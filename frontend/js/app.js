@@ -409,6 +409,8 @@ async function checkout() {
 
     try {
         const order = await ordersApi.create(payload)
+        const searchInput = document.getElementById("search-input")
+        searchInput.value = ""
         showToast(`Venta #${order.id} realizada — Cambio: $${change.toFixed(2)}`)
         clearCart()
         // Reload products so stock counts reflect the order
@@ -417,8 +419,6 @@ async function checkout() {
         showToast(`Error al realizar la venta: ${e.message}`, "error")
     } finally {
         btn.textContent = "Cobrar"
-        const searchInput = document.getElementById("search-input")
-        searchInput.value = ""
         renderCart()
     }
 }
@@ -592,7 +592,7 @@ async function submitProductForm(e) {
 
     const payload = {
         name: document.getElementById("form-name").value.trim(),
-        barcode: document.getElementById("form-barcode").value.trim() ? document.getElementById("form-barcode").value.trim() : barcode,
+        barcode: barcode,
         category: document.getElementById("form-category").value || null,
         price: document.getElementById("form-price").value,
         stock: document.getElementById("form-stock").value,

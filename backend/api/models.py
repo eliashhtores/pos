@@ -80,9 +80,15 @@ class OrderItem(models.Model):
 
 
 class AccountPayable(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        PAID = "paid", "Pagado"
+        OVERDUE = "overdue", "Atrasado"
+
     name = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     attributes = models.JSONField(null=True, blank=True)
