@@ -1,44 +1,44 @@
 from django.core.management.base import BaseCommand
-from api.models import Category, Product
+from api.models import Category, Order, OrderItem, Product
 
 
 SEED_DATA = [
     {
-        "category": "Beverages",
+        "category": "Bebidas",
         "products": [
-            {"name": "Coffee", "price": "2.50", "stock": 100},
-            {"name": "Tea", "price": "1.75", "stock": 100},
-            {"name": "Orange Juice", "price": "3.00", "stock": 80},
-            {"name": "Water (500ml)", "price": "1.00", "stock": 200},
-            {"name": "Lemonade", "price": "2.25", "stock": 60},
+            {"name": "Café", "price": "2.50", "stock": 100},
+            {"name": "Té", "price": "1.75", "stock": 100},
+            {"name": "Jugo de Naranja", "price": "3.00", "stock": 80},
+            {"name": "Agua (500ml)", "price": "1.00", "stock": 200},
+            {"name": "Limonada", "price": "2.25", "stock": 60},
         ],
     },
     {
-        "category": "Snacks",
+        "category": "Bocadillos",
         "products": [
-            {"name": "Chips (Regular)", "price": "1.50", "stock": 150},
-            {"name": "Chocolate Bar", "price": "1.25", "stock": 120},
-            {"name": "Granola Bar", "price": "2.00", "stock": 90},
-            {"name": "Pretzel Pack", "price": "1.75", "stock": 100},
-            {"name": "Cookies (Pack)", "price": "3.00", "stock": 70},
+            {"name": "Papas Fritas (Original)", "price": "1.50", "stock": 150},
+            {"name": "Barra de Chocolate", "price": "1.25", "stock": 120},
+            {"name": "Barra de Granola", "price": "2.00", "stock": 90},
+            {"name": "Paquete de Pretzels", "price": "1.75", "stock": 100},
+            {"name": "Galletas (Paquete)", "price": "3.00", "stock": 70},
         ],
     },
     {
-        "category": "Food",
+        "category": "Comida",
         "products": [
-            {"name": "Sandwich", "price": "5.50", "stock": 40},
-            {"name": "Salad Bowl", "price": "7.00", "stock": 30},
-            {"name": "Burger", "price": "8.50", "stock": 50},
-            {"name": "Hot Dog", "price": "4.00", "stock": 60},
-            {"name": "Pizza Slice", "price": "3.50", "stock": 45},
+            {"name": "Sándwich", "price": "5.50", "stock": 40},
+            {"name": "Ensalada", "price": "7.00", "stock": 30},
+            {"name": "Hamburguesa", "price": "8.50", "stock": 50},
+            {"name": "Perro Caliente", "price": "4.00", "stock": 60},
+            {"name": "Rebanada de Pizza", "price": "3.50", "stock": 45},
         ],
     },
     {
-        "category": "Dairy",
+        "category": "Lácteos",
         "products": [
-            {"name": "Milk (1L)", "price": "1.80", "stock": 80},
-            {"name": "Yogurt", "price": "2.20", "stock": 70},
-            {"name": "Cheese Slice", "price": "0.75", "stock": 100},
+            {"name": "Leche (1L)", "price": "1.80", "stock": 80},
+            {"name": "Yogur", "price": "2.20", "stock": 70},
+            {"name": "Rebanada de Queso", "price": "0.75", "stock": 100},
         ],
     },
 ]
@@ -47,7 +47,30 @@ SEED_DATA = [
 class Command(BaseCommand):
     help = "Seed the database with sample products and categories"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--flush",
+            action="store_true",
+            help=(
+                "Delete all existing orders, order items, products and categories "
+                "before seeding (use this to replace previously seeded data, e.g. "
+                "when switching the seed data language)."
+            ),
+        )
+
     def handle(self, *args, **options):
+        if options["flush"]:
+            deleted_items, _ = OrderItem.objects.all().delete()
+            deleted_orders, _ = Order.objects.all().delete()
+            deleted_products, _ = Product.objects.all().delete()
+            deleted_categories, _ = Category.objects.all().delete()
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Flushed {deleted_orders} orders, {deleted_items} order items, "
+                    f"{deleted_products} products and {deleted_categories} categories."
+                )
+            )
+
         created_categories = 0
         created_products = 0
 

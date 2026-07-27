@@ -59,7 +59,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ["note", "items"]
+        fields = ["id", "note", "items", "total"]
 
     def validate_items(self, value):
         if not value:

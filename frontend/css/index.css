@@ -1,0 +1,11 @@
+/* Custom scrollbar for cart */
+.cart-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.cart-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+.cart-scroll::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 3px;
+}

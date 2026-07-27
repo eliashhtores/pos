@@ -1,257 +1,311 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Point of Sale</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Custom scrollbar for cart */
-    .cart-scroll::-webkit-scrollbar { width: 6px; }
-    .cart-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
-    .cart-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
-  </style>
-</head>
-<body class="bg-slate-100 min-h-screen font-sans">
-
-  <!-- ===== LOGIN OVERLAY ===== -->
-  <div id="login-overlay"
-    class="fixed inset-0 z-[100] flex items-center justify-center bg-indigo-900/90 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
-      <div class="flex items-center gap-3 mb-6">
-        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-        </svg>
-        <h1 class="text-xl font-bold text-slate-800">POS System</h1>
-      </div>
-      <form id="login-form" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-600 mb-1" for="login-username">Username</label>
-          <input id="login-username" type="text" required autocomplete="username"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-600 mb-1" for="login-password">Password</label>
-          <input id="login-password" type="password" required autocomplete="current-password"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        </div>
-        <p id="login-error" class="text-sm text-red-600 min-h-[1.25rem]"></p>
-        <button id="login-btn" type="submit"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition">
-          Sign In
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ===== MAIN APP (hidden until authenticated) ===== -->
-  <div id="app" class="hidden">
-
-  <!-- Header -->
-  <header class="bg-indigo-700 text-white shadow-md">
-    <div class="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-        </svg>
-        <span class="text-xl font-bold tracking-wide">POS System</span>
-      </div>
-      <nav class="flex gap-4 text-sm font-medium">
-        <button id="nav-pos" onclick="showPage('pos')"
-          class="px-3 py-1 rounded-full bg-white text-indigo-700 hover:bg-indigo-100 transition">
-          Cashier
-        </button>
-        <button id="nav-orders" onclick="showPage('orders')"
-          class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
-          Orders
-        </button>
-        <button id="nav-products" onclick="showPage('products')"
-          class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
-          Products
-        </button>
-        <button onclick="logout()"
-          class="px-3 py-1 rounded-full hover:bg-indigo-600 transition opacity-75 hover:opacity-100">
-          Sign Out
-        </button>
-      </nav>
-    </div>
-  </header>
-
-  <main id="page-pos" class="max-w-screen-xl mx-auto px-4 py-6 flex gap-6">
-
-    <!-- Products Panel -->
-    <section class="flex-1 min-w-0">
-      <!-- Search & Filter -->
-      <div class="flex flex-wrap gap-3 mb-4">
-        <input id="search-input" type="search" placeholder="Search products…"
-          class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-4 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        <select id="category-filter"
-          class="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-          <option value="">All Categories</option>
-        </select>
-      </div>
-
-      <!-- Product Grid -->
-      <div id="product-grid"
-        class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- populated by JS -->
-      </div>
-      <p id="products-empty" class="hidden text-center text-slate-500 py-16">No products found.</p>
-    </section>
-
-    <!-- Cart Panel -->
-    <aside class="w-80 flex-shrink-0">
-      <div class="bg-white rounded-2xl shadow-md flex flex-col h-full max-h-[calc(100vh-120px)] sticky top-4">
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 class="font-semibold text-slate-700 text-lg">Cart</h2>
-          <button onclick="clearCart()"
-            class="text-xs text-red-400 hover:text-red-600 transition">Clear</button>
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Punto de Venta</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="css/index.css" />
+    </head>
+    <body class="bg-slate-100 min-h-screen font-sans">
+        <!-- ===== LOGIN OVERLAY ===== -->
+        <div id="login-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-indigo-900/90 backdrop-blur-sm">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                        />
+                    </svg>
+                    <h1 class="text-xl font-bold text-slate-800">Sistema POS</h1>
+                </div>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1" for="login-username">Usuario</label>
+                        <input
+                            id="login-username"
+                            type="text"
+                            required
+                            autocomplete="username"
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1" for="login-password">Contraseña</label>
+                        <input
+                            id="login-password"
+                            type="password"
+                            required
+                            autocomplete="current-password"
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                    </div>
+                    <p id="login-error" class="text-sm text-red-600 min-h-[1.25rem]"></p>
+                    <button
+                        id="login-btn"
+                        type="submit"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition"
+                    >
+                        Iniciar Sesión
+                    </button>
+                </form>
+            </div>
         </div>
 
-        <!-- Cart items -->
-        <div id="cart-items" class="flex-1 overflow-y-auto cart-scroll px-5 py-3 space-y-3">
-          <p id="cart-empty" class="text-center text-slate-400 text-sm py-8">Cart is empty</p>
-        </div>
+        <!-- ===== MAIN APP (hidden until authenticated) ===== -->
+        <div id="app" class="hidden">
+            <!-- Header -->
+            <header class="bg-indigo-700 text-white shadow-md">
+                <div class="max-w-screen-xl mx-auto px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                        </svg>
+                        <span class="text-xl font-bold tracking-wide">Sistema POS</span>
+                    </div>
+                    <nav class="flex gap-4 text-sm font-medium">
+                        <button
+                            id="nav-pos"
+                            onclick="showPage('pos')"
+                            class="px-3 py-1 rounded-full bg-white text-indigo-700 hover:bg-indigo-100 transition"
+                        >
+                            Cajero
+                        </button>
+                        <button id="nav-orders" onclick="showPage('orders')" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
+                            Pedidos
+                        </button>
+                        <button id="nav-products" onclick="showPage('products')" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
+                            Productos
+                        </button>
+                        <button onclick="logout()" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition opacity-75 hover:opacity-100">
+                            Cerrar Sesión
+                        </button>
+                    </nav>
+                </div>
+            </header>
 
-        <!-- Note -->
-        <div class="px-5 pb-3">
-          <textarea id="order-note" rows="2" placeholder="Order note (optional)…"
-            class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"></textarea>
-        </div>
+            <main id="page-pos" class="max-w-screen-xl mx-auto px-4 py-6 flex gap-6">
+                <!-- Products Panel -->
+                <section class="flex-1 min-w-0">
+                    <!-- Search & Filter -->
+                    <div class="flex flex-wrap gap-3 mb-4">
+                        <input
+                            id="search-input"
+                            type="search"
+                            placeholder="Buscar productos…"
+                            class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-4 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                        <select
+                            id="category-filter"
+                            class="rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                        >
+                            <option value="">Todas las Categorías</option>
+                        </select>
+                    </div>
 
-        <!-- Totals & Checkout -->
-        <div class="px-5 pb-5 border-t border-slate-100 pt-3 space-y-3">
-          <div class="flex justify-between text-sm text-slate-600">
-            <span>Items</span>
-            <span id="cart-count">0</span>
-          </div>
-          <div class="flex justify-between font-bold text-slate-800 text-lg">
-            <span>Total</span>
-            <span id="cart-total">$0.00</span>
-          </div>
-          <button id="checkout-btn" onclick="checkout()"
-            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition">
-            Place Order
-          </button>
-        </div>
-      </div>
-    </aside>
-  </main>
+                    <!-- Product Grid -->
+                    <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <!-- populated by JS -->
+                    </div>
+                    <p id="products-empty" class="hidden text-center text-slate-500 py-16">No se encontraron productos.</p>
+                </section>
 
-  <!-- ===== ORDERS PAGE ===== -->
-  <main id="page-orders" class="hidden max-w-screen-xl mx-auto px-4 py-6">
-    <h2 class="text-xl font-semibold text-slate-700 mb-4">Order History</h2>
-    <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 text-left">#</th>
-              <th class="px-4 py-3 text-left">Date</th>
-              <th class="px-4 py-3 text-left">Items</th>
-              <th class="px-4 py-3 text-right">Total</th>
-              <th class="px-4 py-3 text-center">Status</th>
-              <th class="px-4 py-3 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="orders-table-body" class="divide-y divide-slate-100">
-            <!-- populated by JS -->
-          </tbody>
-        </table>
-      </div>
-      <p id="orders-empty" class="hidden text-center text-slate-400 py-12">No orders yet.</p>
-    </div>
-  </main>
+                <!-- Cart Panel -->
+                <aside class="w-80 flex-shrink-0">
+                    <div class="bg-white rounded-2xl shadow-md flex flex-col h-full max-h-[calc(100vh-120px)] sticky top-4">
+                        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <h2 class="font-semibold text-slate-700 text-lg">Carrito</h2>
+                            <button onclick="clearCart()" class="text-xs text-red-400 hover:text-red-600 transition">Vaciar</button>
+                        </div>
 
-  <!-- ===== PRODUCTS MGMT PAGE ===== -->
-  <main id="page-products" class="hidden max-w-screen-xl mx-auto px-4 py-6">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-semibold text-slate-700">Products</h2>
-      <button onclick="openProductModal()"
-        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-        + New Product
-      </button>
-    </div>
-    <div class="bg-white rounded-2xl shadow-md overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
-            <tr>
-              <th class="px-4 py-3 text-left">Name</th>
-              <th class="px-4 py-3 text-left">Category</th>
-              <th class="px-4 py-3 text-right">Price</th>
-              <th class="px-4 py-3 text-right">Stock</th>
-              <th class="px-4 py-3 text-center">Active</th>
-              <th class="px-4 py-3 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="products-table-body" class="divide-y divide-slate-100"></tbody>
-        </table>
-      </div>
-      <p id="products-table-empty" class="hidden text-center text-slate-400 py-12">No products yet.</p>
-    </div>
-  </main>
+                        <!-- Cart items -->
+                        <div id="cart-items" class="flex-1 overflow-y-auto cart-scroll px-5 py-3 space-y-3">
+                            <p id="cart-empty" class="text-center text-slate-400 text-sm py-8">El carrito está vacío</p>
+                        </div>
 
-  <!-- ===== PRODUCT MODAL ===== -->
-  <div id="product-modal"
-    class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-      <h3 id="modal-title" class="text-lg font-semibold text-slate-700 mb-5">New Product</h3>
-      <form id="product-form" class="space-y-4" onsubmit="submitProductForm(event)">
-        <input type="hidden" id="product-id" />
-        <div>
-          <label class="block text-sm font-medium text-slate-600 mb-1">Name</label>
-          <input id="form-name" type="text" required
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-600 mb-1">Category</label>
-          <select id="form-category"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-            <option value="">-- No Category --</option>
-          </select>
-        </div>
-        <div class="flex gap-4">
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-slate-600 mb-1">Price ($)</label>
-            <input id="form-price" type="number" step="0.01" min="0" required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          </div>
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-slate-600 mb-1">Stock</label>
-            <input id="form-stock" type="number" min="0" required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-600 mb-1">Description</label>
-          <textarea id="form-description" rows="2"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
-        </div>
-        <div class="flex items-center gap-2">
-          <input id="form-active" type="checkbox" checked class="w-4 h-4 accent-indigo-600" />
-          <label for="form-active" class="text-sm text-slate-600">Active (visible in cashier)</label>
-        </div>
-        <div class="flex justify-end gap-3 pt-2">
-          <button type="button" onclick="closeProductModal()"
-            class="px-4 py-2 text-sm rounded-lg border border-slate-300 hover:bg-slate-50 transition">Cancel</button>
-          <button type="submit"
-            class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">Save</button>
-        </div>
-      </form>
-    </div>
-  </div>
+                        <!-- Note -->
+                        <div class="px-5 pb-3">
+                            <textarea
+                                id="order-note"
+                                rows="2"
+                                placeholder="Nota del pedido (opcional)…"
+                                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                            ></textarea>
+                        </div>
 
-  <!-- ===== TOAST ===== -->
-  <div id="toast"
-    class="hidden fixed bottom-5 right-5 z-50 bg-slate-800 text-white text-sm px-5 py-3 rounded-xl shadow-lg transition-opacity duration-300">
-  </div>
+                        <!-- Totals & Checkout -->
+                        <div class="px-5 pb-5 border-t border-slate-100 pt-3 space-y-3">
+                            <div class="flex justify-between text-sm text-slate-600">
+                                <span>Artículos</span>
+                                <span id="cart-count">0</span>
+                            </div>
+                            <div class="flex justify-between font-bold text-slate-800 text-lg">
+                                <span>Total</span>
+                                <span id="cart-total">$0.00</span>
+                            </div>
+                            <button
+                                id="checkout-btn"
+                                onclick="checkout()"
+                                class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition"
+                            >
+                                Realizar Pedido
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+            </main>
 
-  </div><!-- end #app -->
+            <!-- ===== ORDERS PAGE ===== -->
+            <main id="page-orders" class="hidden max-w-screen-xl mx-auto px-4 py-6">
+                <h2 class="text-xl font-semibold text-slate-700 mb-4">Historial de Pedidos</h2>
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">#</th>
+                                    <th class="px-4 py-3 text-left">Fecha</th>
+                                    <th class="px-4 py-3 text-left">Artículos</th>
+                                    <th class="px-4 py-3 text-right">Total</th>
+                                    <th class="px-4 py-3 text-center">Estado</th>
+                                    <th class="px-4 py-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table-body" class="divide-y divide-slate-100">
+                                <!-- populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <p id="orders-empty" class="hidden text-center text-slate-400 py-12">Aún no hay pedidos.</p>
+                </div>
+            </main>
 
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
-</body>
+            <!-- ===== PRODUCTS MGMT PAGE ===== -->
+            <main id="page-products" class="hidden max-w-screen-xl mx-auto px-4 py-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-slate-700">Productos</h2>
+                    <button
+                        onclick="openProductModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+                    >
+                        + Nuevo Producto
+                    </button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Nombre</th>
+                                    <th class="px-4 py-3 text-left">Categoría</th>
+                                    <th class="px-4 py-3 text-right">Precio</th>
+                                    <th class="px-4 py-3 text-right">Stock</th>
+                                    <th class="px-4 py-3 text-center">Activo</th>
+                                    <th class="px-4 py-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <p id="products-table-empty" class="hidden text-center text-slate-400 py-12">Aún no hay productos.</p>
+                </div>
+            </main>
+
+            <!-- ===== PRODUCT MODAL ===== -->
+            <div id="product-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                    <h3 id="modal-title" class="text-lg font-semibold text-slate-700 mb-5">Nuevo Producto</h3>
+                    <form id="product-form" class="space-y-4" onsubmit="submitProductForm(event)">
+                        <input type="hidden" id="product-id" />
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Nombre</label>
+                            <input
+                                id="form-name"
+                                type="text"
+                                required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Categoría</label>
+                            <select
+                                id="form-category"
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                            >
+                                <option value="">-- Sin Categoría --</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-slate-600 mb-1">Precio ($)</label>
+                                <input
+                                    id="form-price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                />
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-slate-600 mb-1">Stock</label>
+                                <input
+                                    id="form-stock"
+                                    type="number"
+                                    min="0"
+                                    required
+                                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Descripción</label>
+                            <textarea
+                                id="form-description"
+                                rows="2"
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                            ></textarea>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input id="form-active" type="checkbox" checked class="w-4 h-4 accent-indigo-600" />
+                            <label for="form-active" class="text-sm text-slate-600">Activo (visible en caja)</label>
+                        </div>
+                        <div class="flex justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                onclick="closeProductModal()"
+                                class="px-4 py-2 text-sm rounded-lg border border-slate-300 hover:bg-slate-50 transition"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ===== TOAST ===== -->
+            <div
+                id="toast"
+                class="hidden fixed bottom-5 right-5 z-50 bg-slate-800 text-white text-sm px-5 py-3 rounded-xl shadow-lg transition-opacity duration-300"
+            ></div>
+        </div>
+        <!-- end #app -->
+
+        <script src="js/api.js"></script>
+        <script src="js/app.js"></script>
+    </body>
 </html>
