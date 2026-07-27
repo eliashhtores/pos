@@ -419,6 +419,7 @@ async function checkout() {
         btn.textContent = "Cobrar"
         const searchInput = document.getElementById("search-input")
         searchInput.value = ""
+        renderCart()
     }
 }
 
@@ -575,9 +576,7 @@ async function openProductModal(productId) {
             showToast("No se pudieron cargar los detalles del producto.", "error")
             closeProductModal()
         }
-    } else {
-        document.getElementById("product-form").reset()
-    }
+    } else document.getElementById("product-form").reset()
 }
 
 function closeProductModal() {
@@ -587,9 +586,13 @@ function closeProductModal() {
 async function submitProductForm(e) {
     e.preventDefault()
     const id = document.getElementById("product-id").value
+    const barcode = document.getElementById("form-barcode").value.trim()
+        ? document.getElementById("form-barcode").value.trim()
+        : generateBarcode(1, 10000000000)
+
     const payload = {
         name: document.getElementById("form-name").value.trim(),
-        barcode: document.getElementById("form-barcode").value.trim() || null,
+        barcode: document.getElementById("form-barcode").value.trim() ? document.getElementById("form-barcode").value.trim() : barcode,
         category: document.getElementById("form-category").value || null,
         price: document.getElementById("form-price").value,
         stock: document.getElementById("form-stock").value,
@@ -727,4 +730,8 @@ async function deletePayable(id) {
 
 function escHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
+
+const generateBarcode = (min, max) => {
+    return Math.floor(Math.random() * (max - min + 1)) + min
 }
