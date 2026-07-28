@@ -633,7 +633,7 @@ async function deleteProduct(id) {
 async function loadPayablesTable() {
     const tbody = document.getElementById("payables-table-body")
     const empty = document.getElementById("payables-table-empty")
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-400">Cargando…</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-slate-400">Cargando…</td></tr>'
     empty.classList.add("hidden")
 
     try {
@@ -649,10 +649,27 @@ async function loadPayablesTable() {
         payables.forEach((payable) => {
             const tr = document.createElement("tr")
             tr.className = "hover:bg-slate-50"
+            const statusStyles = {
+                pending: "bg-yellow-100 text-yellow-700",
+                paid: "bg-green-100 text-green-700",
+                overdue: "bg-red-100 text-red-700",
+            }
+            const statusLabels = {
+                pending: "Pendiente",
+                paid: "Pagado",
+                overdue: "Atrasado",
+            }
+            const statusColor = statusStyles[payable.status] || "bg-slate-100 text-slate-600"
+            const statusLabel = statusLabels[payable.status] || payable.status || "—"
             tr.innerHTML = `
         <td class="px-4 py-3 font-medium text-slate-700">${escHtml(payable.name)}</td>
         <td class="px-4 py-3 text-right font-semibold">$${Number(payable.amount).toFixed(2)}</td>
         <td class="px-4 py-3 text-slate-500">${payable.due_date}</td>
+                <td class="px-4 py-3 text-center">
+                    <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">
+                        ${escHtml(statusLabel)}
+                    </span>
+                </td>
         <td class="px-4 py-3 text-center space-x-2">
           <button onclick="openPayableModal(${payable.id})"
             class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded transition">Editar</button>
@@ -663,7 +680,7 @@ async function loadPayablesTable() {
             tbody.appendChild(tr)
         })
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-500">${e.message}</td></tr>`
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">${e.message}</td></tr>`
     }
 }
 
@@ -678,12 +695,14 @@ async function openPayableModal(payableId) {
             document.getElementById("payable-name").value = p.name
             document.getElementById("payable-amount").value = p.amount
             document.getElementById("payable-due-date").value = p.due_date
+            document.getElementById("payable-status").value = p.status || "pending"
         } catch (e) {
             showToast("No se pudieron cargar los detalles de la cuenta.", "error")
             closePayableModal()
         }
     } else {
         document.getElementById("payable-form").reset()
+        document.getElementById("payable-status").value = "pending"
     }
 }
 
@@ -698,6 +717,7 @@ async function submitPayableForm(e) {
         name: document.getElementById("payable-name").value.trim(),
         amount: document.getElementById("payable-amount").value,
         due_date: document.getElementById("payable-due-date").value,
+        status: document.getElementById("payable-status").value,
     }
 
     try {
