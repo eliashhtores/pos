@@ -103,6 +103,21 @@ const productsApi = {
         const qs = new URLSearchParams(params).toString()
         return apiFetch(`/products/${qs ? "?" + qs : ""}`)
     },
+    // Fetches every page of results and returns a single flat array. Used by
+    // the cashier screen, which needs the full catalog in memory to filter by
+    // name/barcode as the user types.
+    listAll: async (params = {}) => {
+        let results = []
+        let page = 1
+        for (;;) {
+            const data = await productsApi.list({ ...params, page })
+            if (Array.isArray(data)) return results.concat(data)
+            results = results.concat(data.results || [])
+            if (!data.next) break
+            page += 1
+        }
+        return results
+    },
     get: (id) => apiFetch(`/products/${id}/`),
     create: (data) => apiFetch("/products/", { method: "POST", body: data }),
     update: (id, data) => apiFetch(`/products/${id}/`, { method: "PUT", body: data }),
@@ -117,4 +132,14 @@ const ordersApi = {
     create: (data) => apiFetch("/orders/", { method: "POST", body: data }),
     complete: (id) => apiFetch(`/orders/${id}/complete/`, { method: "POST" }),
     cancel: (id) => apiFetch(`/orders/${id}/cancel/`, { method: "POST" }),
+}
+
+// ── Accounts Payable ──────────────────────────────────────────────────────────
+
+const payablesApi = {
+    list: () => apiFetch("/payables/"),
+    get: (id) => apiFetch(`/payables/${id}/`),
+    create: (data) => apiFetch("/payables/", { method: "POST", body: data }),
+    update: (id, data) => apiFetch(`/payables/${id}/`, { method: "PUT", body: data }),
+    destroy: (id) => apiFetch(`/payables/${id}/`, { method: "DELETE" }),
 }

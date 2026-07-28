@@ -1,6 +1,6 @@
-from django.db import models as db_models
+from django.db import models as db_models, transaction
 from rest_framework import serializers
-from .models import Category, Product, Order, OrderItem
+from .models import Category, Product, Order, OrderItem, AccountPayable
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -17,6 +17,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "barcode",
             "description",
             "price",
             "stock",
@@ -28,6 +29,11 @@ class ProductSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+    def validate_barcode(self, value):
+        # Normalize blank strings to None so the unique constraint only
+        # applies to products that actually have a barcode assigned.
+        return value or None
 
 
 class OrderItemReadSerializer(serializers.ModelSerializer):
@@ -76,34 +82,49 @@ class OrderWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"Cannot modify a {self.instance.status} order."
             )
+
+        items = attrs.get("items")
+        if items is None:
+            return attrs
+
+        existing_quantities = {}
+        if self.instance:
+            for existing_item in self.instance.items.all():
+                existing_quantities[existing_item.product_id] = (
+                    existing_quantities.get(existing_item.product_id, 0)
+                    + existing_item.quantity
+                )
+
         # Validate stock availability
-        for item in attrs.get("items", []):
+        for item in items:
             product = item["product"]
             quantity = item["quantity"]
-            if product.stock < quantity:
+            available_stock = product.stock + existing_quantities.get(product.id, 0)
+            if available_stock < quantity:
                 raise serializers.ValidationError(
                     f"Insufficient stock for '{product.name}': "
-                    f"requested {quantity}, available {product.stock}."
+                    f"requested {quantity}, available {available_stock}."
                 )
         return attrs
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
-        order = Order.objects.create(**validated_data)
-        for item_data in items_data:
-            product = item_data["product"]
-            quantity = item_data["quantity"]
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=quantity,
-                unit_price=product.price,
-            )
-            # Decrement stock atomically
-            Product.objects.filter(pk=product.pk).update(
-                stock=db_models.F("stock") - quantity
-            )
-        order.recalculate_total()
+        with transaction.atomic():
+            order = Order.objects.create(**validated_data)
+            for item_data in items_data:
+                product = item_data["product"]
+                quantity = item_data["quantity"]
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=quantity,
+                    unit_price=product.price,
+                )
+                # Decrement stock atomically
+                Product.objects.filter(pk=product.pk).update(
+                    stock=db_models.F("stock") - quantity
+                )
+            order.recalculate_total()
         return order
 
     def update(self, instance, validated_data):
@@ -111,20 +132,38 @@ class OrderWriteSerializer(serializers.ModelSerializer):
         instance.note = validated_data.get("note", instance.note)
 
         if items_data is not None:
-            instance.items.all().delete()
-            for item_data in items_data:
-                product = item_data["product"]
-                quantity = item_data["quantity"]
-                OrderItem.objects.create(
-                    order=instance,
-                    product=product,
-                    quantity=quantity,
-                    unit_price=product.price,
-                )
-            # Compute total and persist note + total in a single write
-            instance.total = sum(item.subtotal for item in instance.items.all())
-            instance.save(update_fields=["note", "total"])
+            with transaction.atomic():
+                existing_items = list(instance.items.all())
+                for existing_item in existing_items:
+                    Product.objects.filter(pk=existing_item.product_id).update(
+                        stock=db_models.F("stock") + existing_item.quantity
+                    )
+
+                instance.items.all().delete()
+                for item_data in items_data:
+                    product = item_data["product"]
+                    quantity = item_data["quantity"]
+                    OrderItem.objects.create(
+                        order=instance,
+                        product=product,
+                        quantity=quantity,
+                        unit_price=product.price,
+                    )
+                    Product.objects.filter(pk=product.pk).update(
+                        stock=db_models.F("stock") - quantity
+                    )
+
+                # Compute total and persist note + total in a single write
+                instance.total = sum(item.subtotal for item in instance.items.all())
+                instance.save(update_fields=["note", "total"])
         else:
             instance.save(update_fields=["note"])
 
         return instance
+
+
+class AccountPayableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountPayable
+        fields = ["id", "name", "amount", "due_date", "status", "created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at"]

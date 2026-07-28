@@ -80,10 +80,13 @@
                             Cajero
                         </button>
                         <button id="nav-orders" onclick="showPage('orders')" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
-                            Pedidos
+                            Ventas
                         </button>
                         <button id="nav-products" onclick="showPage('products')" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
                             Productos
+                        </button>
+                        <button id="nav-payables" onclick="showPage('payables')" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition">
+                            Cuentas por Pagar
                         </button>
                         <button onclick="logout()" class="px-3 py-1 rounded-full hover:bg-indigo-600 transition opacity-75 hover:opacity-100">
                             Cerrar Sesión
@@ -100,7 +103,9 @@
                         <input
                             id="search-input"
                             type="search"
-                            placeholder="Buscar productos…"
+                            placeholder="Buscar por nombre o código de barras…"
+                            autocomplete="off"
+                            autofocus
                             class="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-4 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         />
                         <select
@@ -116,6 +121,9 @@
                         <!-- populated by JS -->
                     </div>
                     <p id="products-empty" class="hidden text-center text-slate-500 py-16">No se encontraron productos.</p>
+                    <p id="products-hint" class="text-center text-slate-400 py-16">
+                        Escriba un nombre o escanee un código de barras para buscar productos.
+                    </p>
                 </section>
 
                 <!-- Cart Panel -->
@@ -136,7 +144,7 @@
                             <textarea
                                 id="order-note"
                                 rows="2"
-                                placeholder="Nota del pedido (opcional)…"
+                                placeholder="Nota de la venta (opcional)…"
                                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
                             ></textarea>
                         </div>
@@ -147,25 +155,38 @@
                                 <span>Artículos</span>
                                 <span id="cart-count">0</span>
                             </div>
-                            <div class="flex justify-between font-bold text-slate-800 text-lg">
+                            <div class="flex justify-between text-slate-500 text-lg">
                                 <span>Total</span>
                                 <span id="cart-total">$0.00</span>
+                            </div>
+                            <div class="pb-3">
+                                <input
+                                    id="cart-payment"
+                                    type="number"
+                                    min="1"
+                                    step="0.01"
+                                    placeholder="Pago ($)"
+                                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                />
+                            </div>
+                            <div class="pb-1">
+                                <p id="cart-change" class="text-slate-800 font-bold text-lg">Cambio: $0.00</p>
                             </div>
                             <button
                                 id="checkout-btn"
                                 onclick="checkout()"
                                 class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition"
                             >
-                                Realizar Pedido
+                                Cobrar
                             </button>
                         </div>
                     </div>
                 </aside>
             </main>
 
-            <!-- ===== ORDERS PAGE ===== -->
+            <!-- ===== SALES PAGE ===== -->
             <main id="page-orders" class="hidden max-w-screen-xl mx-auto px-4 py-6">
-                <h2 class="text-xl font-semibold text-slate-700 mb-4">Historial de Pedidos</h2>
+                <h2 class="text-xl font-semibold text-slate-700 mb-4">Historial de ventas</h2>
                 <div class="bg-white rounded-2xl shadow-md overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
@@ -184,7 +205,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <p id="orders-empty" class="hidden text-center text-slate-400 py-12">Aún no hay pedidos.</p>
+                    <p id="orders-empty" class="hidden text-center text-slate-400 py-12">Aún no hay ventas.</p>
                 </div>
             </main>
 
@@ -205,6 +226,7 @@
                             <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
                                 <tr>
                                     <th class="px-4 py-3 text-left">Nombre</th>
+                                    <th class="px-4 py-3 text-left">Código de Barras</th>
                                     <th class="px-4 py-3 text-left">Categoría</th>
                                     <th class="px-4 py-3 text-right">Precio</th>
                                     <th class="px-4 py-3 text-right">Stock</th>
@@ -219,6 +241,102 @@
                 </div>
             </main>
 
+            <!-- ===== ACCOUNTS PAYABLE PAGE ===== -->
+            <main id="page-payables" class="hidden max-w-screen-xl mx-auto px-4 py-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-slate-700">Cuentas por Pagar</h2>
+                    <button
+                        onclick="openPayableModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+                    >
+                        + Nueva Cuenta
+                    </button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Nombre</th>
+                                    <th class="px-4 py-3 text-right">Monto</th>
+                                    <th class="px-4 py-3 text-left">Fecha de Vencimiento</th>
+                                    <th class="px-4 py-3 text-center">Estado</th>
+                                    <th class="px-4 py-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payables-table-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <p id="payables-table-empty" class="hidden text-center text-slate-400 py-12">Aún no hay cuentas por pagar.</p>
+                </div>
+            </main>
+
+            <!-- ===== PAYABLE MODAL ===== -->
+            <div id="payable-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                    <h3 id="payable-modal-title" class="text-lg font-semibold text-slate-700 mb-5">Nueva Cuenta por Pagar</h3>
+                    <form id="payable-form" class="space-y-4" onsubmit="submitPayableForm(event)">
+                        <input type="hidden" id="payable-id" />
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Nombre</label>
+                            <input
+                                id="payable-name"
+                                type="text"
+                                required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Monto ($)</label>
+                            <input
+                                id="payable-amount"
+                                type="number"
+                                step="0.01"
+                                min="1"
+                                required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Fecha de Vencimiento</label>
+                            <input
+                                id="payable-due-date"
+                                type="date"
+                                required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Estado</label>
+                            <select
+                                id="payable-status"
+                                required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                            >
+                                <option value="pending">Pendiente</option>
+                                <option value="paid">Pagado</option>
+                                <option value="overdue">Atrasado</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                onclick="closePayableModal()"
+                                class="px-4 py-2 text-sm rounded-lg border border-slate-300 hover:bg-slate-50 transition"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- ===== PRODUCT MODAL ===== -->
             <div id="product-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                 <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -231,6 +349,14 @@
                                 id="form-name"
                                 type="text"
                                 required
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Código de Barras</label>
+                            <input
+                                id="form-barcode"
+                                type="text"
                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                             />
                         </div>
