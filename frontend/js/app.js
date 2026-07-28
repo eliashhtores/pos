@@ -326,7 +326,6 @@ function renderCart() {
     }
 
     emptyMsg.classList.add("hidden")
-    btn.disabled = false
 
     let totalQty = 0
     const fragment = document.createDocumentFragment()
@@ -586,9 +585,8 @@ function closeProductModal() {
 async function submitProductForm(e) {
     e.preventDefault()
     const id = document.getElementById("product-id").value
-    const barcode = document.getElementById("form-barcode").value.trim()
-        ? document.getElementById("form-barcode").value.trim()
-        : generateBarcode(1, 10000000000)
+    const rawBarcode = document.getElementById("form-barcode").value.trim()
+    const barcode = rawBarcode || generateBarcode(1, 10000000000)
 
     const payload = {
         name: document.getElementById("form-name").value.trim(),
